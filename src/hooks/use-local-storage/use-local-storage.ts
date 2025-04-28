@@ -1,5 +1,13 @@
 import React from "react";
 
+/* ---------------------------------------------------- */
+
+type useLocalStorageReturnShape = {
+  storedValue: any;
+  setValue: (value: any | ((val: any) => void)) => void;
+  removeValue: () => void;
+};
+
 /**
  * Hook to store and retrieve data from browser localStorage API.
  *
@@ -10,9 +18,9 @@ import React from "react";
 export function useLocalStorage<T>(
   key: string,
   initialValue: T
-): [T, (value: T | ((val: T) => T)) => void] {
+): useLocalStorageReturnShape {
   // Read stored if available or return initial value
-  const readValue = () => {
+  const readValue = (): T => {
     if (typeof window === "undefined") {
       return initialValue;
     }
@@ -53,5 +61,16 @@ export function useLocalStorage<T>(
     }
   };
 
-  return [storedValue, setValue];
+  const removeValue = () => {
+    if (typeof window === "undefined") {
+      console.error(
+        `Can't remove key '${key}' from localStorage. Environment is not a client`
+      );
+    }
+
+    // Remove value
+    localStorage.removeItem(key);
+  };
+
+  return { storedValue, setValue, removeValue };
 }
