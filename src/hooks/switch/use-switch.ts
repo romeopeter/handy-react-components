@@ -9,7 +9,7 @@ import { UseSwitchShape } from "./type";
  * @param init boolean
  * @returns UseSwitchShape
  */
-export function useBoolean(init?: boolean): UseSwitchShape {
+export function useSwitch(init?: boolean): UseSwitchShape {
   const [state, setState] = React.useState(init ? init : false);
 
   return {
