@@ -1,8 +1,8 @@
 import React from "react";
 
-/* ---------------------------------------------------- */
+/* ---------------------------------------- */
 
-type useLocalStorageReturnShape = {
+type UseLocalStorage = {
   storedValue: any;
   setValue: (value: any | ((val: any) => void)) => void;
   removeValue: () => void;
@@ -18,7 +18,7 @@ type useLocalStorageReturnShape = {
 export function useLocalStorage<T>(
   key: string,
   initialValue: T
-): useLocalStorageReturnShape {
+): UseLocalStorage {
   // Read stored if available or return initial value
   const readValue = (): T => {
     if (typeof window === "undefined") {
@@ -27,7 +27,15 @@ export function useLocalStorage<T>(
 
     try {
       const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
+      let storedItem = initialValue;
+
+      if (item) {
+        storedItem = JSON.parse(item);
+      } else {
+        localStorage.setItem(key, initialValue as string);
+      }
+
+      return storedItem;
     } catch (error) {
       console.error(`Unable to read local storage key ${key}:`, error);
 
