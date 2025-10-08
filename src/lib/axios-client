@@ -1,0 +1,261 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import axios, {
+  type AxiosInstance,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
+} from "axios";
+import tokenUtils from "./token-util"
+
+/* ------------------------------------------------------------- */
+
+// Base API URL - update this to your backend URL
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api";
+
+// Create axios instance
+const apiClient: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  // timeout: 10000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+/ Flag to prevent multiple refresh attempts
+let shouldRefresh = false;
+
+let failedQueue: Array<{
+  resolve: (value?: any) => void;
+  reject: (error?: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(token);
+    }
+  });
+
+  failedQueue = [];
+};
+
+// Request interceptor to add auth token
+apiClient.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const accessToken = tokenUtils.getAccessToken();
+    const guestToken = localStorage.getItem("araafit_guest_token");
+    const adminAccessToken = tokenUtils.getAdminAccessToken();
+
+    // Priority: admin access token > user access token > guest user token
+    if (adminAccessToken && !tokenUtils.isTokenExpired(adminAccessToken)) {
+      config.headers.Authorization = `Bearer ${adminAccessToken}`;
+    } else if (accessToken && !tokenUtils.isTokenExpired(accessToken)) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
+    } else if (guestToken) {
+      // For guest users, use the guest token
+      config.headers.Authorization = `Bearer ${guestToken}`;
+    }
+
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor for token refresh
+apiClient.interceptors.response.use(
+  (response: AxiosResponse) => {
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config;
+
+    console.log("error", error, originalRequest._retry);
+
+    // Do not attempt refresh for auth endpoints
+    if (error.config?.url?.includes("/auth/")) {
+      return Promise.reject(error);
+    }
+
+    // Check if error is 401 and we haven't already tried to refresh
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      const refreshToken = tokenUtils.getRefreshToken();
+      const adminRefreshToken = tokenUtils.getAdminRefreshToken();
+      const guestToken = localStorage.getItem("araafit_guest_token");
+
+      // If token should refresh, the go ahead and queue request.
+      if (shouldRefresh) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return apiClient(originalRequest);
+          })
+          .catch((err) => {
+            return Promise.reject(err);
+          });
+      }
+
+      originalRequest._retry = true;
+      shouldRefresh = true;
+
+      // If there's admin refresh token, then request for access tokens
+      if (adminRefreshToken && adminRefreshToken !== "undefined") {
+        console.log("Admin refresh token");
+
+        try {
+          const response = await axios.post(`${API_BASE_URL}/admin/refresh`, {
+            refresh_token: adminRefreshToken,
+          });
+
+          const newTokens: AuthTokens = response.data;
+          tokenUtils.setAdminTokens(newTokens);
+
+          processQueue(null, newTokens.access_token);
+          
+          return apiClient(originalRequest);
+        } catch (refreshError) {
+          // Admin refresh failed, clear admin tokens and redirect
+          tokenUtils.clearAdminTokens();
+
+          showToast.error("Admin session expired. Please login again.", {
+            icon: null,
+            style: notificationStyles.alertError,
+            position: "top-center",
+          });
+
+          processQueue(refreshError, null);
+
+          setTimeout(() => (window.location.href = "/auth/admin-login"), 1000);
+
+          return Promise.reject(refreshError);
+        }
+      }
+
+      // If guest user token exist but no logged-in user refresh token, handle guest token expiry
+      if (guestToken && !refreshToken) {
+        // Guest token expired, clear it and redirect to measurement or login
+        tokenUtils.clearTokens();
+        localStorage.removeItem("araafit_guest_token");
+
+        showToast.error("Guest session expired. Please get measured again.", {
+          icon: null,
+          style: notificationStyles.alertError,
+          position: "top-center",
+        });
+
+        setTimeout(() => (window.location.href = "/get-measured"), 1000);
+
+        return Promise.reject(error);
+      }
+
+      // No user (registered user) refresh token, redirect to login
+      if (!refreshToken || refreshToken === "undefined") {
+        console.log("No refresh token");
+
+        tokenUtils.clearTokens();
+
+        showToast.error("Session expired. Redirecting login page", {
+          icon: null,
+          style: notificationStyles.alertError,
+          position: "top-center",
+        });
+
+        setTimeout(() => (window.location.href = "/auth/login"), 1000);
+
+        return Promise.reject(error);
+      }
+
+      // Attempt to refresh logged-in user token
+      try {
+        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+          refresh_token: refreshToken,
+        });
+
+        const newTokens: AuthTokens = response.data;
+        tokenUtils.setTokens(newTokens);
+
+        // Update the authorization header
+        apiClient.defaults.headers.common[
+          "Authorization"
+        ] = `Bearer ${newTokens.access_token}`;
+        originalRequest.headers.Authorization = `Bearer ${newTokens.access_token}`;
+
+        processQueue(null, newTokens.access_token);
+
+        return apiClient(originalRequest);
+      } catch (error) {
+        tokenUtils.clearTokens();
+
+        // Refresh failed, clear tokens and redirect to login
+        showToast.error("Session expired. Redirecting login page.", {
+          icon: null,
+          style: notificationStyles.alertError,
+          position: "top-center",
+        });
+
+        setTimeout(() => (window.location.href = "/auth/login"), 1000);
+
+        return Promise.reject(error);
+      } finally {
+        shouldRefresh = false;
+      }
+    }
+
+    // Handle other errors
+    if (error.response) {
+      const { status, data } = error.response;
+
+      switch (status) {
+        case 400:
+          showToast.error(data.message || "Invalid request", {
+            icon: null,
+            style: notificationStyles.alertError,
+            position: "top-center",
+          });
+          break;
+        case 403:
+          showToast.error("Access denied", {
+            icon: null,
+            style: notificationStyles.alertError,
+            position: "top-center",
+          });
+          break;
+        case 404:
+          showToast.error("Resource not found", {
+            icon: null,
+            style: notificationStyles.alertError,
+            position: "top-center",
+          });
+          break;
+        case 500:
+          showToast.error("Server error. Please try again later.", {
+            icon: null,
+            style: notificationStyles.alertError,
+            position: "top-center",
+          });
+          break;
+        default:
+          showToast.error(data.message || "An error occurred", {
+            icon: null,
+            style: notificationStyles.alertError,
+            position: "top-center",
+          });
+      }
+    } else if (error.request) {
+      showToast.error("Network error. Please check your connection.", {
+        icon: null,
+        style: notificationStyles.alertError,
+        position: "top-center",
+      });
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export default apiClient;
