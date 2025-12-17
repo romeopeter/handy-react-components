@@ -1,0 +1,26 @@
+// Format card number with spaces
+  const formatCardNumber = (cardNumber: string) => {
+    const cleanCardNumber = cardNumber
+      .replace(/\s+/g, "")
+      .replace(/[^0-9]/gi, "");
+    const matches = cleanCardNumber.match(/\d{4,16}/g);
+    const match = matches?.[0] || "";
+    const parts = [];
+    for (let i = 0, len = match.length; i < len; i += 4) {
+      //@ts-expect-error Argument string not assigned to any
+      parts.push(match.substring(i, i + 4));
+    }
+
+    return parts.length ? parts.join(" ") : cleanCardNumber;
+  };
+
+  // Format card expiry date
+  const formatExpiryDate = (date: string) => {
+    let value = date.replace(/\D/g, "");
+
+    if (value.length > 2) {
+      value = value.substring(0, 2) + "/" + value.substring(2, 4);
+    }
+
+    return value;
+  };
