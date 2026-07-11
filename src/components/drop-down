@@ -1,0 +1,58 @@
+* ------------------------------------------------------------------ */
+/*  Reusable primitive: a checkbox-style item that renders a CUSTOM    */
+/*  icon (instead of the default check mark) whenever it's unchecked,  */
+/*  and swaps to a check mark when checked. This is the pattern to     */
+/*  reach for any time a consumer needs to pass their own icon into    */
+/*  a checkbox item — think of it as a light switch with a little      */
+/*  picture on the plate: the picture tells you what the switch does,  */
+/*  the toggle state tells you whether it's on.                        */
+/* ------------------------------------------------------------------ */
+function IconCheckboxItem({ icon: Icon, checked, onCheckedChange, children, ...props }) {
+  return (
+    <DropdownMenuItem
+      onSelect={(e) => {
+        e.preventDefault(); // keep the menu open on select
+        onCheckedChange?.(!checked);
+      }}
+      className="gap-2"
+      {...props}
+    >
+      <span className="flex h-4 w-4 items-center justify-center">
+        {checked ? (
+          <Check className="h-4 w-4" />
+        ) : Icon ? (
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        ) : null}
+      </span>
+      {children}
+    </DropdownMenuItem>
+  );
+}
+ 
+/* ------------------------------------------------------------------ */
+/*  Reusable primitive: a radio-style item with a custom icon. Same    */
+/*  idea as above, but only one item in the group can be "on" at a     */
+/*  time — like a car radio's preset buttons, pressing one releases    */
+/*  the others.                                                         */
+/* ------------------------------------------------------------------ */
+function IconRadioItem({ icon: Icon, value, currentValue, onSelect, children }) {
+  const active = value === currentValue;
+  return (
+    <DropdownMenuItem
+      onSelect={(e) => {
+        e.preventDefault();
+        onSelect?.(value);
+      }}
+      className="gap-2"
+    >
+      <span className="flex h-4 w-4 items-center justify-center">
+        {active ? (
+          <Check className="h-4 w-4" />
+        ) : Icon ? (
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        ) : null}
+      </span>
+      {children}
+    </DropdownMenuItem>
+  );
+}
