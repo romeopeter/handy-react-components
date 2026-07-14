@@ -1,0 +1,69 @@
+import { cn } from "@/lib/utils";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+
+/* ------------------------------------------------------------------ */ 
+
+export interface PaginatorProps {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  loading: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+  onPageSizeChange: (size: number) => void;
+  showRowPerPage?: boolean;
+  containerClassName?: string
+}
+
+/* ------------------------------------------------------------------ */
+ 
+export default function Paginator({ page, pageSize, totalCount, loading, onPrev, onNext, onPageSizeChange, showRowPerPage, containerClassName }: PaginatorProps) {
+  const totalPages = Math.ceil(totalCount / pageSize);
+  const from = totalCount === 0 ? 0 : page * pageSize + 1;
+  const to = Math.min((page + 1) * pageSize, totalCount);
+ 
+  return (
+    <div className={cn("px-3 md:px-6 py-3 border-t border-gray-100 flex flex-col items-start md:flex-row md:items-center justify-between text-[24px] md:text-[32px] text-gray-500", containerClassName)}>
+      <div className={`w-full md:w-auto flex items-center justify-between md:justify-start gap-2 mb-5 md:mb-0 ${showRowPerPage?'flex':'sm:invisible'}`}>
+        <span>Rows per page:</span>
+        <div className="relative">
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            className="appearance-none pl-3 pr-7 py-1 text-[24px] border border-gray-200 rounded-md bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300 cursor-pointer"
+          >
+            {[5, 10, 20].map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+        </div>
+      </div>
+ 
+      <div className="w-full md:w-auto flex items-center justify-between md:justify-start gap-4">
+        <span>
+          {loading ? "—" : `${from}–${to} of ${totalCount}`}
+        </span>
+        <div className="flex items-center  gap-1">
+          <button
+            onClick={onPrev}
+            disabled={page === 0 || loading}
+            className="p-1.5 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="px-2 text-gray-700 font-medium">
+            {totalPages === 0 ? "—" : `${page + 1} / ${totalPages}`}
+          </span>
+          <button
+            onClick={onNext}
+            disabled={page + 1 >= totalPages || loading}
+            className="p-1.5 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
